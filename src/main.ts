@@ -1,6 +1,5 @@
 import { SessionData, Store } from "express-session";
-import WebSocketStrategy, { Surreal } from "surrealdb.js";
-import { ConnectionOptions } from 'surrealdb.js/script/types';
+import WebSocketStrategy, { Surreal } from "surrealdb";
 
 
 export type SurrealDBStoreOptions = {
@@ -18,7 +17,7 @@ export type SurrealDBStoreOptions = {
     /**
      * Options for the initial SurrealDB connection
     */
-    connectionOpts: ConnectionOptions;
+    connectionOpts: Parameters<Surreal['connect']>[1];
     /**
     * Sign-in options
     */
