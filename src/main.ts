@@ -51,7 +51,9 @@ export class SurrealDBStore extends Store {
 
         this.tableName = options.tableName ?? 'user_sessions';
 
-        this._connect();
+        this._connect().catch(err => {
+            console.error("Failed to connect express-session SurrealDB Store to database!\n" + err.message + '\n' + err.stack);
+        });
     }
 
     private async _connect() {
@@ -62,13 +64,13 @@ export class SurrealDBStore extends Store {
     }
 
 	get(sessionId: string, cb: Function) {
-        this.db.select(this.tableName + ':`' + sessionId + '`')
+        this.db.select(this.tableName + ':(' + sessionId + ')')
             .then(([record]) => cb(null, record))
             .catch(err => cb(err))
     }
 
     set(sessionId: string, session, cb: Function) {
-        this.db.merge(this.tableName + ':`' + sessionId + '`', session)
+        this.db.insert(this.tableName + ':(' + sessionId + ')', session)
             .then(() => cb(null))
             .catch(err => cb(err))
     }
@@ -80,7 +82,7 @@ export class SurrealDBStore extends Store {
     }
 
 	destroy (sessionId: string, cb: Function) {
-        this.db.delete(this.tableName + ':`' + sessionId + '`')
+        this.db.delete(this.tableName + ':(' + sessionId + ')')
             .then(() => cb(null))
             .catch(err => cb(err))
     }
