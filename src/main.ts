@@ -1,5 +1,5 @@
 import { SessionData, Store } from "express-session";
-import WebSocketStrategy, { Surreal } from "surrealdb";
+import WebSocketStrategy, { r, Surreal } from "surrealdb";
 
 
 export type SurrealDBStoreOptions = {
@@ -64,13 +64,14 @@ export class SurrealDBStore extends Store {
     }
 
 	get(sessionId: string, cb: Function) {
-        this.db.select(this.tableName + ':(' + sessionId + ')')
-            .then(([record]) => cb(null, record))
+        this.db.select(r`${this.tableName}:⟨${sessionId}⟩`)
+            .then((res) => cb(res === undefined ? new Error("Session not found in store") : null, res?.[0]))
             .catch(err => cb(err))
     }
 
     set(sessionId: string, session, cb: Function) {
-        this.db.insert(this.tableName + ':(' + sessionId + ')', session)
+        // should this be a record (r)?
+        this.db.insert(`${this.tableName}:⟨${sessionId}⟩`, session)
             .then(() => cb(null))
             .catch(err => cb(err))
     }
@@ -82,7 +83,7 @@ export class SurrealDBStore extends Store {
     }
 
 	destroy (sessionId: string, cb: Function) {
-        this.db.delete(this.tableName + ':(' + sessionId + ')')
+        this.db.delete(r`${this.tableName}:⟨${sessionId}⟩`)
             .then(() => cb(null))
             .catch(err => cb(err))
     }
