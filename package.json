@@ -1,6 +1,6 @@
 {
   "name": "connect-surreal",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "description": "SurrealDB session store for Connect",
   "main": "dist/main.js",
   "author": "Andrew G. Knackstedt",
