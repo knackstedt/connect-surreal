@@ -75,6 +75,8 @@ export class SurrealDBStore extends Store {
         if (this.options.useOpts) {
             await this.db.use(this.options.useOpts);
         }
+
+        this.isConnected = true;
     }
 
     /**
