@@ -48,6 +48,9 @@ export class SurrealDBStore extends Store {
 
         this.db = options.surreal ?? new Surreal();
 
+        // TODO: support provided error handler
+        this.db.emitter.subscribe('error', console.log);
+
         // Re-connect
         this.db.emitter.subscribe("disconnected", () => {
             this.isConnected = false;
@@ -103,6 +106,11 @@ export class SurrealDBStore extends Store {
             .then(() => {
                 this.isConnected = true;
             });
+
+        await this.db.signin(this.options.signinOpts);
+
+        if (this.options.useOpts)
+            await this.db.use(this.options.useOpts);
     }
 
     /**
