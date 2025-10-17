@@ -33,6 +33,12 @@ export type SurrealDBStoreOptions = {
      * Optional surreal db instance override.
      */
     surreal?: Surreal,
+
+    logger?: {
+        error: (any) => void,
+        info: (any) => void,
+        debug: (any) => void,
+    }
 }
 
 export class SurrealDBStore extends Store {
@@ -48,8 +54,7 @@ export class SurrealDBStore extends Store {
 
         this.db = options.surreal ?? new Surreal();
 
-        // TODO: support provided error handler
-        this.db.emitter.subscribe('error', console.log);
+        this.db.emitter.subscribe('error', options.logger?.error);
 
         // Re-connect
         this.db.emitter.subscribe("disconnected", () => {
@@ -57,11 +62,7 @@ export class SurrealDBStore extends Store {
             this._reconnect();
         });
 
-        // Preventative for SQLi if the developer hasn't hardcoded this.
-        if (options.tableName && /^[a-zA-Z0-9]+$/.test(options.tableName))
-            throw new Error("Invalid table name.");
-
-        this.tableName = options.tableName ?? 'user_sessions';
+        this.tableName = options.tableName ?? 'user_session';
 
         this._connect().catch(err => {
             console.error("Failed to connect express-session SurrealDB Store to database!\n" + err.message + '\n' + err.stack);
@@ -73,7 +74,9 @@ export class SurrealDBStore extends Store {
      */
     private async _connect() {
         await this.db.connect(this.options.url, this.options.connectionOpts);
-        await this.db.signin(this.options.signinOpts);
+        if (this.options.signinOpts) {
+            await this.db.signin(this.options.signinOpts);
+        }
 
         if (this.options.useOpts) {
             await this.db.use(this.options.useOpts);
@@ -107,19 +110,18 @@ export class SurrealDBStore extends Store {
                 this.isConnected = true;
             });
 
-        await this.db.signin(this.options.signinOpts);
-
-        if (this.options.useOpts)
+        if (this.options.signinOpts) {
+            await this.db.signin(this.options.signinOpts);
+        }
+        if (this.options.useOpts) {
             await this.db.use(this.options.useOpts);
+        }
     }
 
     /**
      * Check the connection state and attempt to reconnect before continuing
      * This ensures that sessions shouldn't observe disruptions in edge cases
-     * where the connection gets lost and we can't connect immediately.
-     *
-     * If there's 50 minutes between the drop and a new connection, the user won't
-     * get an error screen and need to refresh their page.
+     * where the connection gets lost and we didn't reconnect by now.
      */
     private async _checkConnectionAndReconnect() {
         if (!this.isConnected) {
@@ -168,7 +170,7 @@ export class SurrealDBStore extends Store {
     }
 
 	length(cb: Function) {
-        this.db.query(`SELECT count() from $p group by count`, { 'p': this.tableName })
+        this.db.query(`SELECT count() FROM type::table($table) GROUP ALL`, { 'table': this.tableName })
             .then(([result]) => cb(result[0].count))
             .catch(err => cb(err))
     }
@@ -180,7 +182,7 @@ export class SurrealDBStore extends Store {
     }
 
 	clear(cb: Function) {
-        this.db.query(`DELETE $p`, { 'p': this.tableName })
+        this.db.query(`DELETE type::table($table)`, { 'table': this.tableName })
             .then(() => cb(null))
             .catch(err => cb(err))
     }
