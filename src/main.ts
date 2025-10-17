@@ -23,6 +23,18 @@ export type SurrealDBStoreOptions = {
     */
     signinOpts: Parameters<WebSocketStrategy['signin']>[0];
 
+    /**
+     * Automatically sweep and remove expired sessions periodically.
+     * @default false
+     */
+    autoSweepExpired?: boolean;
+
+    /**
+     * Interval in milliseconds to sweep for expired sessions.
+     * @default 600000 (10 minutes)
+     */
+    autoSweepIntervalMs?: number;
+
 
     /**
      * Use options (Select namespace, database)
@@ -67,6 +79,20 @@ export class SurrealDBStore extends Store {
         this._connect().catch(err => {
             console.error("Failed to connect express-session SurrealDB Store to database!\n" + err.message + '\n' + err.stack);
         });
+
+        if (this.options.autoSweepExpired) {
+            const intervalMs = this.options.autoSweepIntervalMs ?? 10 * 60 * 1000;
+            setInterval(() => {
+                this.db.query(
+                    `DELETE type::table($table) WHERE expires < time::now()`,
+                    { table: this.tableName }
+                ).then(() => {
+                    options.logger?.info(`SurrealDBStore: Swept expired sessions from table ${this.tableName}`);
+                }).catch(err => {
+                    options.logger?.error(`SurrealDBStore: Failed to sweep expired sessions: ${err.message}`);
+                });
+            }, intervalMs);
+        }
     }
 
     /**
