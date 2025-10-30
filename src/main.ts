@@ -46,11 +46,24 @@ export type SurrealDBStoreOptions = {
      */
     surreal?: Surreal,
 
+    /**
+     * Optional logger
+     */
     logger?: {
         error: (any) => void,
         info: (any) => void,
         debug: (any) => void,
     }
+
+    /**
+     * Custom setter function for storing session data. If provided, this function will be used instead of the default upsert logic.
+     */
+    customSetter?: (db: Surreal, sessionId: string, session: SessionData) => Promise<any>;
+
+    /**
+     * Custom getter function for retrieving session data. If provided, this function will be used instead of the default select logic.
+     */
+    customGetter?: (db: Surreal, sessionId: string) => Promise<SessionData | null>;
 }
 
 export class SurrealDBStore extends Store {
@@ -163,20 +176,34 @@ export class SurrealDBStore extends Store {
         }
     }
 
+    /**
+     * Get session data by session ID
+     */
 	get(sessionId: string, cb: Function) {
         this._checkConnectionAndReconnect()
         .then(() => {
-            this.db.select(new RecordId(this.tableName, sessionId))
+            const getter = this.options.customSetter
+                ? this.options.customGetter(this.db, sessionId)
+                : this.db.select(new RecordId(this.tableName, sessionId));
+
+            getter
                 .then((res) => cb(null, res))
                 .catch(err => cb(err))
         })
         .catch(err => cb(err))
     }
 
-    set(sessionId: string, session, cb: Function) {
+    /**
+     * Set session data for a given session ID
+     */
+    set(sessionId: string, session: SessionData, cb: Function) {
         this._checkConnectionAndReconnect()
             .then(() => {
-                this.db.upsert(new RecordId(this.tableName, sessionId), session)
+                const setter = this.options.customSetter
+                    ? this.options.customSetter(this.db, sessionId, session)
+                    : this.db.upsert(new RecordId(this.tableName, sessionId), session as any);
+
+                setter
                     .then((res) => cb(null, res))
                     .catch(err => cb(err));
             })
@@ -189,7 +216,7 @@ export class SurrealDBStore extends Store {
         this.set(sid, session, cb);
     }
 
-	destroy (sessionId: string, cb: Function) {
+	destroy(sessionId: string, cb: Function) {
         this.db.delete(new RecordId(this.tableName, sessionId))
             .then(() => cb(null))
             .catch(err => cb(err))
