@@ -182,7 +182,7 @@ export class SurrealDBStore extends Store {
 	get(sessionId: string, cb: Function) {
         this._checkConnectionAndReconnect()
         .then(() => {
-            const getter = this.options.customSetter
+            const getter = this.options.customGetter
                 ? this.options.customGetter(this.db, sessionId)
                 : this.db.select(new RecordId(this.tableName, sessionId));
 
