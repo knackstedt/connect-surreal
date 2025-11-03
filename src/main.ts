@@ -1,4 +1,4 @@
-import { SessionData, Store } from "express-session";
+import { type SessionData, Store } from "express-session";
 import WebSocketStrategy, { r, RecordId, Surreal } from "surrealdb";
 
 
@@ -71,7 +71,10 @@ export class SurrealDBStore extends Store {
     private db: Surreal;
     private tableName: string;
     private lastConnectionAttempt = 0;
+
+    // Has the store ever successfully connected
     private hasConnected = false;
+    // Is currently connected
     private isConnected = false;
 
     constructor(private readonly options: SurrealDBStoreOptions) {
@@ -89,9 +92,14 @@ export class SurrealDBStore extends Store {
 
         this.tableName = options.tableName ?? 'user_session';
 
-        this._connect().catch(err => {
-            console.error("Failed to connect express-session SurrealDB Store to database!\n" + err.message + '\n' + err.stack);
-        });
+        this._connect()
+            .then(() => {
+                this.hasConnected = true;
+                options.logger?.info("SurrealDBStore connected to database.");
+            })
+            .catch(err => {
+                console.error("Failed to connect express-session SurrealDB Store to database!\n" + err.message + '\n' + err.stack);
+            });
 
         if (this.options.autoSweepExpired) {
             const intervalMs = this.options.autoSweepIntervalMs ?? 10 * 60 * 1000;
@@ -122,6 +130,7 @@ export class SurrealDBStore extends Store {
         }
 
         this.isConnected = true;
+        this.hasConnected = true;
     }
 
     /**
