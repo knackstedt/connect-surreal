@@ -14,7 +14,7 @@
     "lib": ["ES2020"]
   },
   "exclude": [
-    "test/**/*.ts",
+    "src/test/**/*.ts",
     "dist/**/*.ts"
   ]
 }

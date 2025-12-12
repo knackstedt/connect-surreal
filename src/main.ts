@@ -1,5 +1,5 @@
 import { type SessionData, Store } from "express-session";
-import WebSocketStrategy, { r, RecordId, Surreal } from "surrealdb";
+import { RecordId, Surreal, Table } from "surrealdb";
 
 
 export type SurrealDBStoreOptions = {
@@ -21,7 +21,7 @@ export type SurrealDBStoreOptions = {
     /**
     * Sign-in options
     */
-    signinOpts: Parameters<WebSocketStrategy['signin']>[0];
+    signinOpts: Parameters<Surreal['signin']>[0];
 
     /**
      * Automatically sweep and remove expired sessions periodically.
@@ -40,7 +40,7 @@ export type SurrealDBStoreOptions = {
      * Use options (Select namespace, database)
      * @optional
      */
-    useOpts?: Parameters<WebSocketStrategy['use']>[0];
+    useOpts?: Parameters<Surreal['use']>[0];
     /**
      * Optional surreal db instance override.
      */
@@ -81,14 +81,6 @@ export class SurrealDBStore extends Store {
         super();
 
         this.db = options.surreal ?? new Surreal();
-
-        this.db.emitter.subscribe('error', options.logger?.error);
-
-        // Re-connect
-        this.db.emitter.subscribe("disconnected", () => {
-            this.isConnected = false;
-            this._reconnect();
-        });
 
         this.tableName = options.tableName ?? 'user_session';
 
@@ -134,89 +126,29 @@ export class SurrealDBStore extends Store {
     }
 
     /**
-     * Reconnect to the database if our connection drops. This uses a connection
-     * throttling technique to prevent connection storming.
-     */
-    private async _reconnect() {
-        if (this.isConnected) return;
-
-        // If this last tried to connect under 5 seconds ago, abort.
-        // This prevents overloading the network with connection attempts.
-        if (Date.now() - this.lastConnectionAttempt < 5000) {
-            if (this.hasConnected) {
-                console.error("The connection to SurrealDB appears to have dropped.");
-            }
-            else {
-                console.error("Cannot reconnect to SurrealDB.");
-            }
-            return;
-        }
-
-        this.lastConnectionAttempt = Date.now();
-        await this.db.connect(this.options.url, this.options.connectionOpts)
-            .then(() => {
-                this.isConnected = true;
-            });
-
-        if (this.options.signinOpts) {
-            await this.db.signin(this.options.signinOpts);
-        }
-        if (this.options.useOpts) {
-            await this.db.use(this.options.useOpts);
-        }
-    }
-
-    /**
-     * Check the connection state and attempt to reconnect before continuing
-     * This ensures that sessions shouldn't observe disruptions in edge cases
-     * where the connection gets lost and we didn't reconnect by now.
-     */
-    private async _checkConnectionAndReconnect() {
-        if (!this.isConnected) {
-            if (this.hasConnected) {
-                // The connection has dropped once and we just need to reconnect.
-                await this._reconnect();
-            }
-            else {
-                // In the case where the initial connection
-                // fails and is resolved after startup.
-                await this._connect();
-            }
-        }
-    }
-
-    /**
      * Get session data by session ID
      */
 	get(sessionId: string, cb: Function) {
-        this._checkConnectionAndReconnect()
-        .then(() => {
-            const getter = this.options.customGetter
-                ? this.options.customGetter(this.db, sessionId)
-                : this.db.select(new RecordId(this.tableName, sessionId));
+        const getter = this.options.customGetter
+            ? this.options.customGetter(this.db, sessionId)
+            : this.db.select(new RecordId(this.tableName, sessionId));
 
-            getter
-                .then((res) => cb(null, res))
-                .catch(err => cb(err))
-        })
-        .catch(err => cb(err))
+        getter
+            .then((res) => cb(null, res))
+            .catch(err => cb(err))
     }
 
     /**
      * Set session data for a given session ID
      */
     set(sessionId: string, session: SessionData, cb: Function) {
-        this._checkConnectionAndReconnect()
-            .then(() => {
-                const setter = this.options.customSetter
-                    ? this.options.customSetter(this.db, sessionId, session)
-                    : this.db.upsert(new RecordId(this.tableName, sessionId), session as any);
+        const setter = this.options.customSetter
+            ? this.options.customSetter(this.db, sessionId, session)
+            : this.db.upsert(new RecordId(this.tableName, sessionId)).content(session as any);
 
-                setter
-                    .then((res) => cb(null, res))
-                    .catch(err => cb(err));
-            })
-            .catch(err => cb(err))
+        setter
+            .then((res) => cb(null, res))
+            .catch(err => cb(err));
     }
 
     touch(sid: string, session, cb: Function) {
@@ -233,12 +165,13 @@ export class SurrealDBStore extends Store {
 
 	length(cb: Function) {
         this.db.query(`SELECT count() FROM type::table($table) GROUP ALL`, { 'table': this.tableName })
+            .collect()
             .then(([result]) => cb(result[0].count))
             .catch(err => cb(err))
     }
 
 	all(cb: Function) {
-        this.db.select(this.tableName)
+        this.db.select(new Table(this.tableName))
             .then(([result]) => cb(result))
             .catch(err => cb(err))
     }
