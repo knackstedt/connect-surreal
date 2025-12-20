@@ -53,7 +53,7 @@ export type SurrealDBStoreOptions = {
         error: (any) => void,
         info: (any) => void,
         debug: (any) => void,
-    }
+    };
 
     /**
      * Custom setter function for storing session data. If provided, this function will be used instead of the default upsert logic.
@@ -64,7 +64,7 @@ export type SurrealDBStoreOptions = {
      * Custom getter function for retrieving session data. If provided, this function will be used instead of the default select logic.
      */
     customGetter?: (db: Surreal, sessionId: string) => Promise<SessionData | null>;
-}
+};
 
 export class SurrealDBStore extends Store {
 
@@ -87,6 +87,7 @@ export class SurrealDBStore extends Store {
         this._connect()
             .then(() => {
                 this.hasConnected = true;
+                this.db.query(`CREATE TABLE IF NOT EXISTS ${this.tableName} COMMENT 'Automatically created by express-session SurrealDB Store'`);
                 options.logger?.info("SurrealDBStore connected to database.");
             })
             .catch(err => {
@@ -128,14 +129,14 @@ export class SurrealDBStore extends Store {
     /**
      * Get session data by session ID
      */
-	get(sessionId: string, cb: Function) {
+    get(sessionId: string, cb: Function) {
         const getter = this.options.customGetter
             ? this.options.customGetter(this.db, sessionId)
             : this.db.select(new RecordId(this.tableName, sessionId));
 
         getter
             .then((res) => cb(null, res))
-            .catch(err => cb(err))
+            .catch(err => cb(err));
     }
 
     /**
@@ -157,28 +158,28 @@ export class SurrealDBStore extends Store {
         this.set(sid, session, cb);
     }
 
-	destroy(sessionId: string, cb: Function) {
+    destroy(sessionId: string, cb: Function) {
         this.db.delete(new RecordId(this.tableName, sessionId))
             .then(() => cb(null))
-            .catch(err => cb(err))
+            .catch(err => cb(err));
     }
 
-	length(cb: Function) {
+    length(cb: Function) {
         this.db.query(`SELECT count() FROM type::table($table) GROUP ALL`, { 'table': this.tableName })
             .collect()
             .then(([result]) => cb(result[0].count))
-            .catch(err => cb(err))
+            .catch(err => cb(err));
     }
 
-	all(cb: Function) {
+    all(cb: Function) {
         this.db.select(new Table(this.tableName))
             .then(([result]) => cb(result))
-            .catch(err => cb(err))
+            .catch(err => cb(err));
     }
 
-	clear(cb: Function) {
+    clear(cb: Function) {
         this.db.query(`DELETE type::table($table)`, { 'table': this.tableName })
             .then(() => cb(null))
-            .catch(err => cb(err))
+            .catch(err => cb(err));
     }
 }
