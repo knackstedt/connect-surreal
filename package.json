@@ -1,35 +1,47 @@
 {
-  "name": "connect-surreal",
-  "version": "2.0.1",
-  "description": "SurrealDB session store for Connect",
-  "main": "dist/main.js",
-  "author": "Andrew G. Knackstedt",
-  "license": "MIT",
-  "files": [
-    "dist",
-    "readme.md"
-  ],
-  "scripts": {
-    "build": "tsc"
-  },
-  "devDependencies": {
-    "@types/express-session": "^1.18.2",
-    "@types/node": "^22.18.13",
-    "express": "^5.2.1",
-    "surrealdb": "^2.0.0-alpha.14",
-    "ts-node": "^10.9.2",
-    "tslib": "^2.8.1",
-    "typescript": "^5.6.3"
-  },
-  "peerDependencies": {
-    "express-session": ">=1",
-    "surrealdb": ">=2.0.0-alpha.14 <3.0.0"
-  },
-  "keywords": [
-    "connect",
-    "session",
-    "express",
-    "surreal",
-    "surrealdb"
-  ]
+    "name": "connect-surreal",
+    "version": "2.0.1",
+    "description": "SurrealDB session store for Connect",
+    "author": "Andrew G. Knackstedt",
+    "license": "MIT",
+    "type": "module",
+    "main": "./dist/connect-surreal.cjs",
+    "module": "./dist/connect-surreal.js",
+    "types": "./dist/connect-surreal.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/connect-surreal.d.ts",
+            "import": "./dist/connect-surreal.js",
+            "require": "./dist/connect-surreal.cjs"
+        }
+    },
+    "files": [
+        "dist",
+        "readme.md"
+    ],
+    "scripts": {
+        "build": "vite build"
+    },
+    "devDependencies": {
+        "@types/express-session": "^1.18.2",
+        "@types/node": "^22.18.13",
+        "express": "^5.2.1",
+        "surrealdb": "^2.0.0-alpha.14",
+        "ts-node": "^10.9.2",
+        "tslib": "^2.8.1",
+        "typescript": "^5.9.3",
+        "vite": "^7.3.0",
+        "vite-plugin-dts": "^4.5.4"
+    },
+    "peerDependencies": {
+        "express-session": ">=1",
+        "surrealdb": ">=2.0.0-alpha.14 <3.0.0"
+    },
+    "keywords": [
+        "connect",
+        "session",
+        "express",
+        "surreal",
+        "surrealdb"
+    ]
 }
