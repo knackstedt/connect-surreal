@@ -8,6 +8,10 @@
     "main": "./dist/connect-surreal.cjs",
     "module": "./dist/connect-surreal.js",
     "types": "./dist/connect-surreal.d.ts",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/knackstedt/connect-surreal"
+    },
     "exports": {
         ".": {
             "types": "./dist/connect-surreal.d.ts",
