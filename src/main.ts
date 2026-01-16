@@ -15,13 +15,15 @@ export type SurrealDBStoreOptions = {
     tableName: string,
 
     /**
-     * Options for the initial SurrealDB connection
+     * Options for the initial SurrealDB connection.
+     * You should set the namespace and database in this object.
     */
     connectionOpts: Parameters<Surreal['connect']>[1];
     /**
     * Sign-in options
+    * @deprecated Use SurrealDBStoreOptions.connectionOpts instead (fixes reconnection issues). This will be removed in a future release.
     */
-    signinOpts: Parameters<Surreal['signin']>[0];
+    signinOpts?: Parameters<Surreal['signin']>[0];
 
     /**
      * Automatically sweep and remove expired sessions periodically.
@@ -39,6 +41,7 @@ export type SurrealDBStoreOptions = {
     /**
      * Use options (Select namespace, database)
      * @optional
+     * @deprecated Use SurrealDBStoreOptions.connectionOpts instead (fixes reconnection issues). This will be removed in a future release.
      */
     useOpts?: Parameters<Surreal['use']>[0];
     /**
@@ -50,9 +53,9 @@ export type SurrealDBStoreOptions = {
      * Optional logger
      */
     logger?: {
-        error: (any) => void,
-        info: (any) => void,
-        debug: (any) => void,
+        error?: (any) => void,
+        info?: (any) => void,
+        debug?: (any) => void,
     };
 
     /**
@@ -85,14 +88,18 @@ export class SurrealDBStore extends Store {
         this.tableName = options.tableName ?? 'user_session';
 
         this._connect()
-            .then(() => {
+            .then(async () => {
                 this.hasConnected = true;
-                this.db.query(`CREATE TABLE IF NOT EXISTS ${this.tableName} COMMENT 'Automatically created by express-session SurrealDB Store'`);
-                options.logger?.info("SurrealDBStore connected to database.");
-            })
-            .catch(err => {
-                console.error("Failed to connect express-session SurrealDB Store to database!\n" + err.message + '\n' + err.stack);
+                options.logger?.info?.("SurrealDBStore: Creating schema...");
+                try {
+                    await this.db.query(`DEFINE TABLE OVERWRITE ${this.tableName} COMMENT 'Automatically created by express-session SurrealDB Store'`);
+                    options.logger?.info?.("SurrealDBStore: Schema created successfully.");
+                }
+                catch (err) {
+                    options.logger?.error?.("SurrealDBStore: Failed to create schema: " + err.message);
+                }
             });
+
 
         if (this.options.autoSweepExpired) {
             const intervalMs = this.options.autoSweepIntervalMs ?? 10 * 60 * 1000;
@@ -101,9 +108,9 @@ export class SurrealDBStore extends Store {
                     `DELETE type::table($table) WHERE expires < time::now()`,
                     { table: this.tableName }
                 ).then(() => {
-                    options.logger?.info(`SurrealDBStore: Swept expired sessions from table ${this.tableName}`);
+                    options.logger?.info?.(`SurrealDBStore: Swept expired sessions from table ${this.tableName}`);
                 }).catch(err => {
-                    options.logger?.error(`SurrealDBStore: Failed to sweep expired sessions: ${err.message}`);
+                    options.logger?.error?.(`SurrealDBStore: Failed to sweep expired sessions: ${err.message}`);
                 });
             }, intervalMs);
         }
@@ -113,15 +120,22 @@ export class SurrealDBStore extends Store {
      * Perform the initial connection to the database. This also sets the scope of our connection.
      */
     private async _connect() {
-        await this.db.connect(this.options.url, this.options.connectionOpts);
-        if (this.options.signinOpts) {
-            await this.db.signin(this.options.signinOpts);
-        }
+        this.options.logger?.info?.("SurrealDBStore: Connecting to SurrealDB...");
+        const connectionOpts: Parameters<Surreal['connect']>[1] = {
+            namespace: this.options.useOpts?.namespace,
+            database: this.options.useOpts?.database,
+            authentication: this.options.signinOpts as any,
+            ...this.options.connectionOpts,
+        };
 
-        if (this.options.useOpts) {
-            await this.db.use(this.options.useOpts);
-        }
-
+        await this.db.connect(this.options.url, connectionOpts)
+            .then(() => {
+                this.hasConnected = true;
+                this.options.logger?.info?.("SurrealDBStore: Connected to SurrealDB.");
+            })
+            .catch(err => {
+                this.options.logger?.error?.("SurrealDBStore: Failed to connect to SurrealDB!\n" + err.message + '\n' + err.stack);
+            });
         this.isConnected = true;
         this.hasConnected = true;
     }
@@ -134,9 +148,16 @@ export class SurrealDBStore extends Store {
             ? this.options.customGetter(this.db, sessionId)
             : this.db.select(new RecordId(this.tableName, sessionId));
 
+        this.options.logger?.debug?.("SurrealDBStore: Getting session data for session ID: " + sessionId);
         getter
-            .then((res) => cb(null, res))
-            .catch(err => cb(err));
+            .then((res) => {
+                this.options.logger?.debug?.("SurrealDBStore: Got session data for session ID: " + sessionId);
+                cb(null, res);
+            })
+            .catch(err => {
+                this.options.logger?.error?.("SurrealDBStore: Failed to get session data for session ID: " + sessionId + "\n" + err.message + '\n' + err.stack);
+                cb(err);
+            });
     }
 
     /**
@@ -147,9 +168,16 @@ export class SurrealDBStore extends Store {
             ? this.options.customSetter(this.db, sessionId, session)
             : this.db.upsert(new RecordId(this.tableName, sessionId)).content(session as any);
 
+        this.options.logger?.debug?.("SurrealDBStore: Setting session data for session ID: " + sessionId);
         setter
-            .then((res) => cb(null, res))
-            .catch(err => cb(err));
+            .then((res) => {
+                this.options.logger?.debug?.("SurrealDBStore: Set session data for session ID: " + sessionId);
+                cb(null, res);
+            })
+            .catch(err => {
+                this.options.logger?.error?.("SurrealDBStore: Failed to set session data for session ID: " + sessionId + "\n" + err.message + '\n' + err.stack);
+                cb(err);
+            });
     }
 
     touch(sid: string, session, cb: Function) {
@@ -160,26 +188,50 @@ export class SurrealDBStore extends Store {
 
     destroy(sessionId: string, cb: Function) {
         this.db.delete(new RecordId(this.tableName, sessionId))
-            .then(() => cb(null))
-            .catch(err => cb(err));
+            .then(() => {
+                this.options.logger?.debug?.("SurrealDBStore: Destroyed session data for session ID: " + sessionId);
+                cb(null);
+            })
+            .catch(err => {
+                this.options.logger?.error?.("SurrealDBStore: Failed to destroy session data for session ID: " + sessionId + "\n" + err.message + '\n' + err.stack);
+                cb(err);
+            });
     }
 
     length(cb: Function) {
         this.db.query(`SELECT count() FROM type::table($table) GROUP ALL`, { 'table': this.tableName })
             .collect()
-            .then(([result]) => cb(result[0].count))
-            .catch(err => cb(err));
+            .then(([result]) => {
+                this.options.logger?.debug?.("SurrealDBStore: Got session count: " + result[0].count);
+                cb(result[0].count);
+            })
+            .catch(err => {
+                this.options.logger?.error?.("SurrealDBStore: Failed to get session count\n" + err.message + '\n' + err.stack);
+                cb(err);
+            });
     }
 
     all(cb: Function) {
         this.db.select(new Table(this.tableName))
-            .then(([result]) => cb(result))
-            .catch(err => cb(err));
+            .then(([result]) => {
+                this.options.logger?.debug?.("SurrealDBStore: Got all session data");
+                cb(result);
+            })
+            .catch(err => {
+                this.options.logger?.error?.("SurrealDBStore: Failed to get all session data\n" + err.message + '\n' + err.stack);
+                cb(err);
+            });
     }
 
     clear(cb: Function) {
         this.db.query(`DELETE type::table($table)`, { 'table': this.tableName })
-            .then(() => cb(null))
-            .catch(err => cb(err));
+            .then(() => {
+                this.options.logger?.debug?.("SurrealDBStore: Cleared all session data");
+                cb(null);
+            })
+            .catch(err => {
+                this.options.logger?.error?.("SurrealDBStore: Failed to clear all session data\n" + err.message + '\n' + err.stack);
+                cb(err);
+            });
     }
 }
